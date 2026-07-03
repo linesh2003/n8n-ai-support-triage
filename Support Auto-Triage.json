@@ -1,0 +1,1568 @@
+{
+  "name": "Support Auto-Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "support-ticket",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -864,
+        -16
+      ],
+      "id": "f3da0278-d34b-4b72-87af-7927b490a14a",
+      "name": "Support Webhook",
+      "webhookId": "db0d8c86-c4f4-4f3b-867b-966286f4cdf3"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.item.json.body || $input.item.json;\n\nconst name = String(body.name || '').trim();\nconst email = String(body.email || '').trim();\nconst subject = String(body.subject || '').trim();\nconst message = String(body.message || '').trim();\nconst source = String(body.source || 'webhook').trim();\n\nconst emailValid = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n\nlet completeness = 0;\nif (name) completeness += 20;\nif (emailValid) completeness += 20;\nif (subject.length >= 3) completeness += 20;\nif (message.length >= 10) completeness += 30;\nif (source) completeness += 10;\n\nreturn [{\n  json: {\n    name: name || 'Unknown',\n    email: emailValid ? email : 'invalid',\n    subject: subject || 'No Subject',\n    message: message || 'No details provided',\n    source: source,\n    completeness: completeness,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        -16
+      ],
+      "id": "0fa688ba-b2ae-4176-b195-bbae3549ecd3",
+      "name": "Ticket Validator"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this support ticket:\n\nFrom: {{ $json.name }} ({{ $json.email }})\nSubject: {{ $json.subject }}\nMessage: {{ $json.message }}\nData Completeness: {{ $json.completeness }}/100",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "=You are a senior support triage analyst. Analyze every incoming support ticket and classify it.\n\nCATEGORIES:\n- Bug: The user reports something broken, crashing, not working, or behaving incorrectly\n- Question: The user is asking how to do something, needs help understanding a feature, or wants guidance\n- Feature: The user is requesting a new capability, enhancement, or improvement\n- Billing: The user has a payment, invoice, subscription, or account access issue\n\nPRIORITIES:\n- Critical: System down, data loss, security issue, multiple users affected\n- High: Major feature broken, significant business impact\n- Medium: Feature partially broken, workaround exists\n- Low: Minor issue, cosmetic problem, general question\n\nSENTIMENTS:\n- Frustrated: Angry language, exclamation marks, urgent tone, mentions of leaving\n- Negative: Unhappy but polite, disappointed tone\n- Neutral: Factual, straightforward description\n- Positive: Pleased, complimentary, or enthusiastic\n\nYou MUST respond in EXACTLY this format:\nCATEGORY: [Bug/Question/Feature/Billing]\nPRIORITY: [Critical/High/Medium/Low]\nSENTIMENT: [Frustrated/Negative/Neutral/Positive]\nRESPONSE: [2-3 sentence professional response addressing their specific issue. For Bugs: acknowledge urgency and confirm investigation. For Questions: provide a helpful answer. For Features: thank them and confirm it's logged. For Billing: reassure them and confirm escalation.]"
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        -448,
+        -16
+      ],
+      "id": "62edf365-eaf9-4f3f-8dd7-da838885be0d",
+      "name": "AI Triage Engine"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "glm-5-turbo",
+          "mode": "list",
+          "cachedResultName": "glm-5-turbo"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -528,
+        192
+      ],
+      "id": "0ed21c45-ea1b-4b50-bf6c-042f47bad703",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "M09Ps6LtTAlcET14",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('AI Triage Engine').item.json.text }}",
+                    "rightValue": "CATEGORY: Bug",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "7027f025-0ad6-4680-b8e9-49bf102e5486"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "0"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d9b2011f-594f-4ffc-8791-ca4a83d19b76",
+                    "leftValue": "={{ $('AI Triage Engine').item.json.text }}",
+                    "rightValue": "CATEGORY: Question",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "1bc3b2e8-7458-41cd-9bc8-708fb9c4788c",
+                    "leftValue": "={{ $('AI Triage Engine').item.json.text }}",
+                    "rightValue": "CATEGORY: Feature",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "47bf2826-a980-4e93-81cd-cbff5bd44cf2",
+                    "leftValue": "={{ $('AI Triage Engine').item.json.text }}",
+                    "rightValue": "CATEGORY: Billing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        -64
+      ],
+      "id": "67150b1e-131b-4b09-9153-8a61cfe33dca",
+      "name": "Category Router"
+    },
+    {
+      "parameters": {
+        "sendTo": "lineshquadras@gmail.com",
+        "subject": "=BUG: {{ $('Ticket Validator').item.json.subject }}",
+        "message": "=<h2 style=\"color:#d32f2f;\">Bug Report</h2>\n<table style=\"border-collapse:collapse;width:100%;font-family:Arial;\">\n<tr><td style=\"padding:8px;border:1px solid #ddd;width:120px;\"><b>From</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.name }} ({{ $('Ticket Validator').item.json.email }})</td></tr>\n<tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>Subject</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.subject }}</td></tr>\n<tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>Message</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.message }}</td></tr>\n<tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>AI Analysis</b></td><td style=\"padding:8px;border:1px solid #ddd;white-space:pre-wrap;\">{{ $('AI Triage Engine').item.json.text }}</td></tr>\n</table>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        -496
+      ],
+      "id": "2e3224f5-6d51-4d32-8edb-21790c9a3427",
+      "name": "Bug Alert",
+      "webhookId": "2dff2493-d581-4a81-bc21-31f4891b5038",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Ticket Validator').item.json.email !== 'invalid' ? $('Ticket Validator').item.json.email : 'lineshquadras@gmail.com' }}",
+        "subject": "=Re: {{ $('Ticket Validator').item.json.subject }} — We're On It",
+        "message": "=<p>Hi {{ $('Ticket Validator').item.json.name }},</p>\n<p>Thank you for reporting this issue. We take bug reports seriously and our team is already investigating.</p>\n<p><b>Your ticket has been logged as Priority: </b>{{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}</p>\n<p>We understand how frustrating this can be, and we're working to resolve it as quickly as possible. You'll receive an update within 2 hours for critical issues, or within 24 hours for other priorities.</p>\n<p>If your issue gets worse or you have additional details that might help us diagnose it faster, please reply to this email.</p>\n<p>Best regards,<br><b>NEXUS Support Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        368,
+        -496
+      ],
+      "id": "7ea94c76-7436-41a3-b068-b71da8a3d43d",
+      "name": "Bug Response",
+      "webhookId": "ddc2ad34-4d9a-4f88-88e3-cae21891ab1c",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1700141146,
+          "mode": "list",
+          "cachedResultName": "Bugs",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=1700141146"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "Bug",
+            "priority": "={{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}",
+            "sentiment": "={{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}",
+            "ai_response": "={{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Open",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        -496
+      ],
+      "id": "b180421b-b917-4f2c-a0e5-1135e3250f34",
+      "name": "Bug Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Ticket Validator').item.json.email !== 'invalid' ? $('Ticket Validator').item.json.email : 'lineshquadras@gmail.com' }}",
+        "subject": "=Re: {{ $('Ticket Validator').item.json.subject }}",
+        "message": "=<p>Hi {{ $('Ticket Validator').item.json.name }},</p> <p>Thanks for reaching out! Here's what might help:</p> <p style=\"background:#f5f5f5;padding:15px;border-radius:8px;border-left:4px solid #1976d2;\">{{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}</p> <p>If this doesn't fully answer your question, just reply to this email with more details and a human agent will pick it up.</p> <p>Best regards,<br><b>NEXUS Support Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        -272
+      ],
+      "id": "23e51a6d-c011-4da9-8155-70fd7ea1682c",
+      "name": "Auto Answer",
+      "webhookId": "0e0d1aad-6308-43c0-b9f4-1e7c6462b7db",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 229231782,
+          "mode": "list",
+          "cachedResultName": "Questions",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=229231782"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "Question",
+            "priority": "={{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}",
+            "sentiment": "={{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}",
+            "ai_response": "={{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Open",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        -272
+      ],
+      "id": "fb33eee8-d786-44b0-9c7c-68cac6d6c359",
+      "name": "Question Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Ticket Validator').item.json.email !== 'invalid' ? $('Ticket Validator').item.json.email : 'lineshquadras@gmail.com' }}",
+        "subject": "=Thanks for the idea — {{ $('Ticket Validator').item.json.subject }}",
+        "message": "=<p>Hi {{ $('Ticket Validator').item.json.name }},</p> <p>Great suggestion! We've logged your feature request and our product team will review it in the next sprint cycle.</p> <p style=\"background:#f5f5f5;padding:15px;border-radius:8px;border-left:4px solid #388e3c;\">{{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}</p> <p>Feature requests from active users like you directly shape our roadmap. We'll notify you when this gets scheduled for development.</p> <p>Best regards,<br><b>NEXUS Support Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        -16
+      ],
+      "id": "c78cc538-d566-4669-99c1-6f432e7738eb",
+      "name": "Feature Ack",
+      "webhookId": "1b39cb8a-26be-4958-aec8-fda36ef9a50d",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 709192971,
+          "mode": "list",
+          "cachedResultName": "Features",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=709192971"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "Feature",
+            "priority": "={{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}",
+            "sentiment": "={{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}",
+            "ai_response": "={{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Open",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        -16
+      ],
+      "id": "b3a80682-6143-4bd2-bd9e-1eb7a3b33718",
+      "name": "Feature Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "lineshquadras@gmail.com",
+        "subject": "=BILLING: {{ $('Ticket Validator').item.json.subject }}",
+        "message": "=<h2 style=\"color:#e65100;\">Billing Issue Escalation</h2> <table style=\"border-collapse:collapse;width:100%;font-family:Arial;\"> <tr><td style=\"padding:8px;border:1px solid #ddd;width:120px;\"><b>From</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.name }} ({{ $('Ticket Validator').item.json.email }})</td></tr> <tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>Subject</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.subject }}</td></tr> <tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>Message</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('Ticket Validator').item.json.message }}</td></tr> <tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>AI Priority</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}</td></tr> <tr><td style=\"padding:8px;border:1px solid #ddd;\"><b>Sentiment</b></td><td style=\"padding:8px;border:1px solid #ddd;\">{{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}</td></tr> </table>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        224
+      ],
+      "id": "676445ee-ae33-48a7-9407-a2ac7b4c6e95",
+      "name": "Billing Escalate",
+      "webhookId": "96ae1859-485f-4d56-80a6-62baab568d61",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Ticket Validator').item.json.email !== 'invalid' ? $('Ticket Validator').item.json.email : 'lineshquadras@gmail.com' }}",
+        "subject": "={{ $('Ticket Validator').item.json.email !== 'invalid' ? $('Ticket Validator').item.json.email : 'lineshquadras@gmail.com' }}",
+        "message": "=<p>Hi {{ $('Ticket Validator').item.json.name }},</p> <p>We've received your billing inquiry and it's been escalated to our billing team. They handle all payment and account matters and will respond to you directly within 4 business hours.</p> <p>We understand that billing issues can feel stressful, and we want to assure you that this is being handled with priority.</p> <p>If you have any invoice numbers or transaction IDs, please reply to this email with those details — it will help us resolve this faster.</p> <p>Best regards,<br><b>NEXUS Support Team</b></p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        384,
+        224
+      ],
+      "id": "ab580af5-5523-4e9f-b74f-06df3fe4e1a4",
+      "name": "Billing Ack",
+      "webhookId": "0b6908f9-243f-4826-8b54-4fb4ced517b2",
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "hq4W86zahs1arWKU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1071970806,
+          "mode": "list",
+          "cachedResultName": "Billing",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=1071970806"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "Billing",
+            "priority": "={{ $('AI Triage Engine').item.json.text.split('\\n')[1] }}",
+            "sentiment": "={{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}",
+            "ai_response": "={{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Open",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        224
+      ],
+      "id": "0236ba03-fb16-4340-97ca-fae1f3e86360",
+      "name": "Billing Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "All_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "Uncategorized",
+            "priority": "=Medium",
+            "sentiment": "=Neutral",
+            "ai_response": "={{ $('AI Triage Engine').item.json.Text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Review Required",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        576,
+        512
+      ],
+      "id": "739310c8-3f80-4c24-a60b-2f8acc838b9f",
+      "name": "Fallback Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8",
+          "mode": "list",
+          "cachedResultName": "Support_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "All_Tickets",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1lelcMxhgL93SOUxiyq5IbalejE4KYdQcshg5RIKTyJ8/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $('Ticket Validator').item.json.timestamp }}",
+            "name": "={{ $('Ticket Validator').item.json.name }}",
+            "email": "={{ $('Ticket Validator').item.json.email }}",
+            "subject": "={{ $('Ticket Validator').item.json.subject }}",
+            "message": "={{ $('Ticket Validator').item.json.message }}",
+            "category": "={{ $('AI Triage Engine').item.json.text.split('\\n')[0] }}",
+            "priority": "={{ $('AI Triage Engine').item.json.output.split('\\n')[1] }}",
+            "sentiment": "={{ $('AI Triage Engine').item.json.text.split('\\n')[2] }}",
+            "ai_response": "={{ $('AI Triage Engine').item.json.text.split('\\n')[3] }}",
+            "source": "={{ $('Ticket Validator').item.json.source }}",
+            "status": "Open",
+            "processed": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "name",
+              "displayName": "name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "subject",
+              "displayName": "subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "message",
+              "displayName": "message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "priority",
+              "displayName": "priority",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sentiment",
+              "displayName": "sentiment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ai_response",
+              "displayName": "ai_response",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "processed",
+              "displayName": "processed",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1488,
+        -16
+      ],
+      "id": "4b30b8fb-8b68-46d5-8f29-c588ee63a05a",
+      "name": "Universal Logger",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "w2LfjeCgSXC7OBv3",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Support Webhook": {
+      "main": [
+        [
+          {
+            "node": "Ticket Validator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticket Validator": {
+      "main": [
+        [
+          {
+            "node": "AI Triage Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Triage Engine",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Triage Engine": {
+      "main": [
+        [
+          {
+            "node": "Category Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Router": {
+      "main": [
+        [
+          {
+            "node": "Bug Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto Answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Feature Ack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Billing Escalate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bug Alert": {
+      "main": [
+        [
+          {
+            "node": "Bug Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bug Response": {
+      "main": [
+        [
+          {
+            "node": "Bug Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Answer": {
+      "main": [
+        [
+          {
+            "node": "Question Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feature Ack": {
+      "main": [
+        [
+          {
+            "node": "Feature Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Billing Escalate": {
+      "main": [
+        [
+          {
+            "node": "Billing Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Billing Ack": {
+      "main": [
+        [
+          {
+            "node": "Billing Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feature Logger": {
+      "main": [
+        [
+          {
+            "node": "Universal Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bug Logger": {
+      "main": [
+        [
+          {
+            "node": "Universal Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Logger": {
+      "main": [
+        [
+          {
+            "node": "Universal Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Billing Logger": {
+      "main": [
+        [
+          {
+            "node": "Universal Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Logger": {
+      "main": [
+        [
+          {
+            "node": "Universal Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "drX8jD4X8aluMQIj",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "e887efdb-2ee6-4f7f-ba75-de46ca09f98c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fe6b9af02df823ce33322e10c132f33877f6d596de582c4279293952a2a12acb"
+  },
+  "id": "aocokV5N6OyNnoA7",
+  "tags": []
+}
